@@ -43,21 +43,21 @@ cc
 1. 检查 opencli 是否可用，不可用就指导我安装。
 2. 运行 opencli doctor，确认 Browser Bridge 和 Chrome 连接正常。
 3. 提醒我打开 Chrome 并登录 zhipin.com。
-4. 如果还没有黑名单.md，就从黑名单.template.md 复制一份。
-5. 引导我填写求职城市、目标岗位、跳过公司、跳过岗位、薪资、经验和学历要求。
+4. 如果还没有用户偏好.md，就从用户偏好.template.md 复制一份。
+5. 引导我填写地点倾向、薪资倾向、岗位倾向、行业倾向、公司倾向、经验学历和投递规则。
 6. 配置完成后，用 /job-hunter 或 SKILL.md 中的流程帮我搜索岗位。
 ```
 
 Windows PowerShell 手动复制模板：
 
 ```powershell
-Copy-Item .\黑名单.template.md .\黑名单.md
+Copy-Item .\用户偏好.template.md .\用户偏好.md
 ```
 
 macOS/Linux 手动复制模板：
 
 ```bash
-cp 黑名单.template.md 黑名单.md
+cp 用户偏好.template.md 用户偏好.md
 ```
 
 ## 环境检查
@@ -90,10 +90,10 @@ opencli boss search "产品经理" --city 北京 --limit 3 -f json
 |------|------|
 | `SKILL.md` | skill 主体说明和执行流程 |
 | `CLAUDE.md` | Claude Code 打开仓库后的项目指令 |
-| `黑名单.template.md` | 用户过滤配置模板 |
-| `.gitignore` | 忽略真实黑名单、投递记录和本地日志 |
+| `用户偏好.template.md` | 用户求职偏好配置模板 |
+| `.gitignore` | 忽略真实用户偏好、投递记录和本地日志 |
 
-复制 `黑名单.template.md` 为 `黑名单.md` 后，填写自己的偏好：
+复制 `用户偏好.template.md` 为 `用户偏好.md` 后，填写自己的偏好：
 
 - 不投递公司
 - 谨慎投递公司
@@ -102,9 +102,12 @@ opencli boss search "产品经理" --city 北京 --limit 3 -f json
 - 跳过行业关键词
 - 目标城市
 - 经验、学历、薪资
+- 工作方式和投递规则
 - 其他备注
 
-`黑名单.md` 已被 `.gitignore` 忽略，不要提交真实简历、真实黑名单、投递记录、Cookie、截图或浏览器会话信息。
+`用户偏好.md` 已被 `.gitignore` 忽略。用户的地点、薪资、岗位倾向、公司倾向、行业倾向等长期配置都写在这个文件里；偏好变化时只改 `用户偏好.md`，不要改 `SKILL.md`。
+
+不要提交真实简历、真实用户偏好、投递记录、Cookie、截图或浏览器会话信息。
 
 ## 使用方式
 
@@ -117,12 +120,12 @@ opencli boss search "产品经理" --city 北京 --limit 3 -f json
 或：
 
 ```text
-帮我投递 20 个符合黑名单.md 配置的岗位，投递前检查按钮状态，已沟通过的跳过。
+帮我投递 20 个符合用户偏好.md 配置的岗位，投递前检查按钮状态，已沟通过的跳过。
 ```
 
 skill 会按 `SKILL.md` 的流程执行：
 
-1. 读取用户目标和 `黑名单.md`。
+1. 读取用户目标和 `用户偏好.md`。
 2. 使用 `opencli boss search` 搜索岗位。
 3. 使用 `opencli boss detail` 补充详情。
 4. 过滤不符合要求的岗位。
