@@ -206,15 +206,3 @@ opencli browser eval "document.querySelector('.btn-startchat')?.textContent?.tri
 # 点击立即沟通
 opencli browser click ".btn-startchat" --nth 0
 ```
-
-## 开源维护约定
-
-1. 不提交个人简历、真实黑名单、投递记录、Cookie、截图或浏览器会话信息。
-2. 不在 `SKILL.md` 中写死个人学校、届别、公司经历、城市、行业或岗位方向。
-3. 用户偏好统一放到 `黑名单.md` 或对话参数中。
-4. 模板文件只提供字段和示例格式，示例不得表达维护者的真实偏好。
-5. 自动点击前必须检查按钮文案，避免重复沟通或误操作。
-
----
-
-*工作流版本: 5.0 | 通用 BOSS 求职助手 + 用户配置模板*
