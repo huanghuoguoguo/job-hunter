@@ -4,23 +4,26 @@ BOSS 直聘岗位搜索、筛选、重复检测与辅助投递 skill。它依托
 
 ## 依赖
 
-- OpenCLI: https://github.com/jackwener/opencli
+- OpenCLI（我们的 fork，包含 BOSS `--jobType` 全职/实习过滤等增强）：https://github.com/huanghuoguoguo/OpenCLI
+  - 上游仓库：https://github.com/jackwener/opencli
 - Node.js 21+
 - Chrome 或 Chromium
 - OpenCLI Browser Bridge 扩展
 - 已登录 BOSS 直聘的浏览器会话
 
-推荐安装 OpenCLI：
+> **注意**：上游 npm 包 `@jackwener/opencli` 不带本 skill 依赖的 `--jobType` 参数。如果需要按"全职/实习"在 API 层精准过滤，请按下文从 fork 源码安装。
+
+推荐安装 OpenCLI（仅做基础用法时可选用上游 npm 包）：
 
 ```bash
 npm install -g @jackwener/opencli
 ```
 
-如果你要从源码安装 OpenCLI：
+从我们的 fork 源码安装（推荐，带 `--jobType` 等过滤增强）：
 
 ```bash
-git clone https://github.com/jackwener/opencli.git
-cd opencli
+git clone https://github.com/huanghuoguoguo/OpenCLI.git
+cd OpenCLI
 npm install
 npm run build
 npm link
@@ -136,7 +139,12 @@ skill 会按 `SKILL.md` 的流程执行：
 ## 常用命令
 
 ```bash
+# 推荐：加 --jobType 全职 直接过滤掉实习岗（需要 fork 版本）
+opencli boss search "<关键词>" --city <城市> --jobType 全职 --limit 20 -f json
+
+# 不带 jobType 时会混合校招与实习，需要在岗位名上后处理
 opencli boss search "<关键词>" --city <城市> --limit 20 -f json
+
 opencli boss detail "<security_id>" -f json
 opencli browser open "<job_url>"
 opencli browser eval "document.querySelector('.btn-startchat')?.textContent?.trim()"
