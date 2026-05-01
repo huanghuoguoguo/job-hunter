@@ -116,6 +116,18 @@ opencli boss search --city <城市> --limit 20 -f json
 
 过滤必须保留原因，便于用户复盘。
 
+#### 4.1 实习/猎头/匿名岗启发式过滤
+
+BOSS 部分岗位虽然用了"应届"标签但实际是实习或猎头代发，这些应当跳过：
+
+- **薪资单位是 `元/天` / `元/时`** → 实习岗位（不是月薪 K）。
+- **岗位名包含 `实习 / 实习生`** → 实习岗位。
+- **公司名包含 `某大型 / 某中型 / 某知名 / ㊙️` 等隐去公司名的字样** → 多为猎头/外包代发，建议跳过。
+- **岗位名包含 `算法工程师 / 测试开发 / 嵌入式 / 具身 / 硬件` 等用户偏好的跳过类目**：直接跳过。
+
+> 上游 `--jobType` 过滤需要安装 [huanghuoguoguo/OpenCLI](https://github.com/huanghuoguoguo/OpenCLI) fork 后可用：
+> `opencli boss search "..." --jobType 全职` 直接在 API 层过滤掉所有实习岗。
+
 ### 5. 查看详情
 
 搜索结果中有 `security_id` 时，优先用详情命令补充信息：
@@ -132,28 +144,56 @@ opencli boss detail "<security_id>" -f json
 - 工作地点、薪资、学历、经验。
 - 是否命中用户偏好中的跳过项或谨慎项。
 
-### 6. 重复检测
+### 6. 重复检测 + 活跃度检查（合并到一次 eval）
 
-打开岗位页面，检查沟通按钮文案：
+打开岗位页面后，**用一次 eval 同时拿 3 个信号**：按钮文案、HR 活跃文案、岗位发布时间。这样投递循环里每个岗位只需要 1 次 open + 2 次 eval，避免来回 round-trip：
 
 ```bash
 opencli browser open "<job_url>"
-sleep 2
-opencli browser eval "document.querySelector('.btn-startchat')?.textContent?.trim()"
+sleep 3
+BTN=$(opencli browser eval "document.querySelector('.btn-startchat')?.textContent?.trim() || ''" | tr -d '\r\n')
+ACTIVE=$(opencli browser eval "document.querySelector('.boss-active-time')?.textContent?.trim() || ''" | tr -d '\r\n')
 ```
+
+按钮文案处理：
 
 | 按钮文本 | 状态 | 处理 |
 |----------|------|------|
-| 立即沟通 | 未沟通过 | 可以投递 |
+| 立即沟通 | 未沟通过 | 进入活跃度判断 |
 | 继续沟通 | 已沟通过 | 跳过并记录 |
 | 其他/空 | 状态不明 | 不自动点击，记录异常 |
+
+HR 活跃度文案（`.boss-active-time` 元素）：
+
+| 活跃文案 | 含义 | 默认处理 |
+|----------|------|----------|
+| `刚刚活跃` / `N 分钟内活跃` / `N 小时内活跃` | 当下/几小时内 | ✅ 投递 |
+| `今日活跃` | 今日登录 | ✅ 投递 |
+| `3 日内活跃` / `本周活跃` | 7 日内 | ✅ 投递 |
+| `2 周内活跃` / `近期活跃` | 8-14 日 | ⚠️ 视用户要求决定 |
+| `本月活跃` / `月内活跃` | 15-30 日 | ❌ 默认跳过（HR 已不主动） |
+| `半年内活跃` / `去年活跃` / 空 | ≥ 30 日 / 不明 | ❌ 默认跳过 |
+
+如果用户没特殊要求，建议默认 **跳过 `本月 / 月内 / 半年 / 去年` 以及更久的**。`2 周内 / 近期` 视情况，活跃文案空时 BOSS 通常代表 ≥ 一个月（也建议跳过）。
+
+可选：从页面 JSON-LD 读岗位发布日期作为补充信号：
+
+```bash
+UPDATE=$(opencli browser eval "
+  let d=''; document.querySelectorAll('script[type=\"application/ld+json\"]').forEach(s=>{
+    try{const j=JSON.parse(s.textContent); if(j.upDate) d=j.upDate;}catch(e){}
+  }); d
+" | tr -d '\r\n')
+```
+
+`upDate` 是 ISO 时间戳（如 `2026-04-30T17:30:38`），用来识别新发布岗位（24-72 小时内）。
 
 ### 7. 辅助投递
 
 只在满足以下条件时点击：
 
 - 用户要求执行投递。
-- 该岗位未命中过滤规则。
+- 该岗位未命中过滤规则（含 4.1 启发式与活跃度检查）。
 - 按钮文案明确为"立即沟通"。
 
 ```bash
@@ -161,6 +201,32 @@ opencli browser click ".btn-startchat" --nth 0
 ```
 
 点击后等待 2-3 秒再继续下一个岗位。BOSS 直聘通常会发送用户在平台预设的招呼语；不要在 skill 中写死招呼语。
+
+**典型批量投递循环（边搜边投，单次能稳定跑 50 个）**：
+
+```bash
+while read jid; do
+  if [ $SUCCESS -ge $TARGET ]; then break; fi
+  opencli browser open "https://www.zhipin.com/job_detail/$jid.html" > /dev/null 2>&1
+  sleep 3
+  BTN=$(opencli browser eval "document.querySelector('.btn-startchat')?.textContent?.trim() || ''" | tr -d '\r\n')
+  ACTIVE=$(opencli browser eval "document.querySelector('.boss-active-time')?.textContent?.trim() || ''" | tr -d '\r\n')
+  if [ "$BTN" = "继续沟通" ]; then
+    echo "$jid | SKIP_DONE"
+  elif [ "$BTN" = "立即沟通" ]; then
+    if echo "$ACTIVE" | grep -qE '本月|月内|半年|去年'; then
+      echo "$jid | SKIP_INACTIVE | $ACTIVE"
+    else
+      opencli browser click ".btn-startchat" --nth 0 > /dev/null 2>&1
+      SUCCESS=$((SUCCESS+1))
+      echo "$jid | OK $SUCCESS/$TARGET | $ACTIVE"
+    fi
+  else
+    echo "$jid | ERR [$BTN]"
+  fi
+  sleep 2
+done < /tmp/queue.txt
+```
 
 ### 8. 结果输出
 
@@ -196,15 +262,41 @@ opencli boss search --city <城市> --limit 20 -f json
 # 加筛选条件搜索
 opencli boss search "<关键词>" --city <城市> --experience <经验> --degree <学历> --salary <薪资> --industry <行业> --limit 20 -f json
 
+# 推荐使用 fork（带 --jobType 全职 过滤实习）
+opencli boss search "<关键词>" --city <城市> --jobType 全职 --limit 20 -f json
+
 # 查看详情
 opencli boss detail "<security_id>" -f json
 
 # 打开岗位页
 opencli browser open "<job_url>"
 
-# 检查按钮状态
+# 一次拿三个信号：按钮 + HR 活跃 + 发布时间
 opencli browser eval "document.querySelector('.btn-startchat')?.textContent?.trim()"
+opencli browser eval "document.querySelector('.boss-active-time')?.textContent?.trim()"
+opencli browser eval "let d=''; document.querySelectorAll('script[type=\"application/ld+json\"]').forEach(s=>{try{const j=JSON.parse(s.textContent); if(j.upDate) d=j.upDate;}catch(e){}}); d"
 
 # 点击立即沟通
 opencli browser click ".btn-startchat" --nth 0
 ```
+
+## 进阶提示
+
+### 关键词 vs 推荐
+不带 query 的"推荐岗位"基于 BOSS 对用户的画像（曾点击/曾沟通），通常拉来高经验算法岗。**目标投递场景下关键词搜索精准度高得多**——按用户简历方向选 5-8 个关键词（如 `AI Agent / RAG / 大模型应用 / 智能体 / Java`），每个关键词 × 每个目标城市分别搜，去重后排序。
+
+### 反爬规避
+不要直接在搜索页用 `fetch` 连续调几十次 detail API，会触发 BOSS 的 `code 36/37 您的账户存在异常行为` 限流。**优先用 `opencli boss search/detail` CLI**——它内部会先 navigateTo 模拟真实浏览，再 fetch，反爬触发率低很多。批量循环之间至少留 2 秒 sleep。
+
+### 上游已知问题
+原版 `clis/boss/search.js` 的 `EXP_MAP` 把"应届"误标为 `108`（实际是 BOSS 的"在校生"代码），导致 `--experience 应届` 实际查的是实习。修复版本和 `--jobType` 过滤都在 [huanghuoguoguo/OpenCLI](https://github.com/huanghuoguoguo/OpenCLI) 的 `feat/boss-jobtype-filter` 分支（已提 PR [#1231](https://github.com/jackwener/opencli/pull/1231)）。从该分支 build 后能拿到正确的应届生（`102`）数据 + 实习/全职/兼职过滤参数。
+
+### 候选打分参考
+若候选数远多于目标数，建议加一个简单分数排序：
+
+- 公司命中"大厂关键词"（阿里/字节/腾讯/美团/百度/快手/京东/拼多多/小米/网易/华为 等）+3
+- 岗位名命中用户目标关键词（Agent/RAG/LLM/智能体 等）+2
+- API 返回 `bossOnline: true`（HR 当下在线）+1
+
+按分数倒排，先投高分。
+
